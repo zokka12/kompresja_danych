@@ -179,6 +179,12 @@ void zapisz_slownik(ofstream& outFile, const map<char, string>& slownik_kodow) {
 
 //Główna funkcja realizująca proces kompresji
 void kompresuj_plik(const string& plik_wejsciowy, const string& plik_wyjsciowy) {
+    ifstream testPliku(plik_wejsciowy, ios::binary);
+    if (!testPliku.is_open()) {
+        cout << "Nie mozna otworzyc pliku wejsciowego!" << endl;
+        return;
+    }
+    testPliku.close();
     // Zbieramy statystyki 
     map<char, int> statystyki = zbierz_wystapienia(plik_wejsciowy);
     if (statystyki.empty()) {
@@ -199,10 +205,15 @@ void kompresuj_plik(const string& plik_wejsciowy, const string& plik_wyjsciowy) 
     // Generujemy słownik kodów bitowych 
     map<char, string> slownik_kodow;
     generuj_kody(korzen, "", slownik_kodow);
+    usun_drzewo(korzen);
 
     // Otwieramy plik wejściowy do ponownego odczytu oraz plik wyjściowy do zapisu binarnego
     ifstream inFile(plik_wejsciowy, ios::binary);
     ofstream outFile(plik_wyjsciowy, ios::binary);
+    if (!outFile.is_open()) {
+        cout << "Nie mozna utworzyc pliku wyjsciowego!" << endl;
+        return;
+    }
 
     // Zapisujemy słownik w nagłówku
     zapisz_slownik(outFile, slownik_kodow);
@@ -349,15 +360,6 @@ void dekompresuj_plik(const string& plik_skompresowany, const string& plik_wyjsc
     cout << "Dekompresja zakonczona sukcesem!" << endl;
 }
 
-// Funkcja pomocnicza do zwolnienia pamięci RAM zajmowanej przez drzewo Huffmana
-void usun_drzewo(Node* korzen) {
-    if (korzen == nullptr) {
-        return;
-    }
-    usun_drzewo(korzen->left);
-    usun_drzewo(korzen->right);
-    delete korzen;
-}
 // Główna funkcja programu obsługująca argumenty z linii poleceń
 int main(int argc, char* argv[]) {
     // Sprawdzamy, czy użytkownik podał odpowiednią liczbę argumentów 
