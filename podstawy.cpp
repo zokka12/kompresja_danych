@@ -4,6 +4,7 @@
 #include <string>
 #include <queue>
 #include <vector>
+#include <cstdint>
 
 using namespace std;
 // Węzeł drzewa Huffmana
@@ -165,4 +166,78 @@ void zapisz_slownik(ofstream& outFile, const map<char, string>& slownik_kodow) {
         // Zapisujemy spakowane bajty kodu do pliku
         outFile.write(reinterpret_cast<const char*>(bajty_kodu.data()), potrzebne_bajty);
     }
+}
+
+//Główna funkcja realizująca proces kompresji
+void kompresuj_plik(const string& plik_wejsciowy, const string& plik_wyjsciowy) {
+    // Zbieramy statystyki 
+    map<char, int> statystyki = zbierz_wystapienia(plik_wejsciowy);
+    if (statystyki.empty()) {
+        cout << "Plik wejsciowy jest pusty!" << endl;
+        return;
+    }
+
+    // Obliczamy całkowitą liczbę znaków w pliku wejściowym (potrzebne do poprawnej dekompresji)
+    uint32_t calkowita_liczba_znakow = 0;
+    for (const auto& para : statystyki) {
+        calkowita_liczba_znakow += para.second;
+    }
+
+    // Budujemy drzewo Huffmana 
+    Node* korzen = zbuduj_drzewo(statystyki);
+
+    // Generujemy słownik kodów bitowych 
+    map<char, string> slownik_kodow;
+    generuj_kody(korzen, "", slownik_kodow);
+
+    // Otwieramy plik wejściowy do ponownego odczytu oraz plik wyjściowy do zapisu binarnego
+    ifstream inFile(plik_wejsciowy, ios::binary);
+    ofstream outFile(plik_wyjsciowy, ios::binary);
+
+    // Zapisujemy słownik w nagłówku
+    zapisz_slownik(outFile, slownik_kodow);
+
+    // Zapisujemy całkowitą liczbę znaków (4 bajty), aby dekompresor wiedział kiedy przestać czytać bity
+    outFile.write(reinterpret_cast<const char*>(&calkowita_liczba_znakow), sizeof(calkowita_liczba_znakow));
+
+    // Właściwe kodowanie treści pliku bit po bicie
+    unsigned char bufor_bitowy = 0; // Nasz 8-bitowy "pojemnik" na bity
+    int licznik_bitow = 0;          // Ile bitów obecnie znajduje się w buforze (0-8)
+    char ch;
+
+    while (inFile.get(ch)) {
+        // Pobieramy ciąg zer i jedynek dla aktualnego znaku ze słownika
+        const string& kod = slownik_kodow[ch];
+
+        for (char bit : kod) {
+            // Przesuwamy istniejące bity w buforze o 1 pozycję w lewo, robiąc miejsce z prawej strony
+            bufor_bitowy = (bufor_bitowy << 1);
+
+            // Jeśli aktualny znak kodu to '1', wpisujemy jedynkę na zwolnione miejsce z prawej strony
+            if (bit == '1') {
+                bufor_bitowy = bufor_bitowy | 1;
+            }
+
+            licznik_bitow++;
+
+            // Gdy bufor uzbiera pełny bajt (8 bitów), zapisujemy go do pliku i zerujemy liczniki
+            if (licznik_bitow == 8) {
+                outFile.put(bufor_bitowy);
+                bufor_bitowy = 0;
+                licznik_bitow = 0;
+            }
+        }
+    }
+
+    // Obsługa niedopełnionego ostatniego bajtu (Padding)
+    // Jeśli po przeczytaniu całego pliku w buforze zostały jakieś bity (np. 3 bity)
+    if (licznik_bitow > 0) {
+        // Przesuwamy je maksymalnie w lewo, dopisując z prawej strony puste zera do pełnych 8 bitów
+        bufor_bitowy = bufor_bitowy << (8 - licznik_bitow);
+        outFile.put(bufor_bitowy);
+    }
+
+    inFile.close();
+    outFile.close();
+    cout << "Kompresja zakonczona sukcesem!" << endl;
 }
