@@ -54,7 +54,6 @@ map<char, int> zbierz_wystapienia(const string& nazwa_pliku) {
     ifstream inFile(nazwa_pliku, ios::binary);
     map<char, int> liczba_wystapien;
     char ch;
-
     while (inFile.get(ch)) {
         liczba_wystapien[ch]++;
     }
@@ -62,27 +61,14 @@ map<char, int> zbierz_wystapienia(const string& nazwa_pliku) {
     inFile.close();
     return liczba_wystapien;
 }
-// jak zapisywac słownik w pliku wejsciowym, napewno nie dla wszystkich możliwych znakow, tylko dla znaków które występują w tekście
-// a 110
-// b 01
-// c 1101
-// d 10
-// licznik - można zapisać slownik w sposób: jeden bajt licznika czyli 8 bitów
-//00000100
-//licznik 8b
-// licznik 8b 32 to 5 b
-//67
-//licznik nie trzeba zapisywać jako całego drzewa - można zapisać znak i słowo kodowe i jaka długość - literka w ascii, rozmiar i same bity
-//zapisywanie ios::binary iostream -> specyfikacja binary
 
 Node* zbuduj_drzewo(const map<char, int>& statystyki) {
-    // Tworzymy kolejkę priorytetową (kopiec minimalny)
-    // (typ przechowywanych elementów, kontener, komparator(żeby najmniejsze elementy były na górze))
+    // Tworzymy kolejkę priorytetową  (typ przechowywanych elementów, kontener - elementy sa w vector, komparator(żeby najmniejsze elementy były na górze))
     priority_queue<Node*, vector<Node*>, Compare> kolejka;
 
     // Dla każdej pary (znak - liczba wystąpień) z mapy tworzymy nowy liść
     // auto -  automatycznie rozpoznaje typ zmiennej na podstawie przypisanej wartości
-    //statystyki - zmienna (kontener), przez którą pętla ma przejść
+    //statystyki - zmienna, przez którą pętla ma przejść
     //Dla każdej (for) pojedynczej rzeczy (para), której nie będę modyfikować (const)
     //ani kopiować (&), a jej typ niech C++ zgadnie sam (auto), wyciągniętej ze zbioru
     //(:) statystyki – zrób to, co jest w klamrach.
@@ -99,34 +85,27 @@ Node* zbuduj_drzewo(const map<char, int>& statystyki) {
         // Zdejmujemy dwa drzewa o najmniejszej liczbie wystąpień
         Node* lewe_dziecko = kolejka.top();
         kolejka.pop();
-
         Node* prawe_dziecko = kolejka.top();
         kolejka.pop();
-
         // Obliczamy sumę wystąpień z obu zdjętych węzłów
         int suma = lewe_dziecko->liczba_wystapien + prawe_dziecko->liczba_wystapien;
-
         // Tworzymy węzeł wewnętrzny używając Twojego drugiego konstruktora
         Node* rodzic = new Node(suma, lewe_dziecko, prawe_dziecko);
-
         // Wstawiamy połączone drzewo z powrotem do kolejki
         kolejka.push(rodzic);
     }
-
     // Ostatni pozostały w kolejce element to korzeń gotowego drzewa Huffmana
     return kolejka.top();
 }
-
-//  Generowanie kodów bitowych (przejście po drzewie w głąb - DFS)
+//  Generowanie kodów bitowych 
 void generuj_kody(Node* korzen, string obecny_kod, map<char, string>& slownik_kodow) {
     //Zabezpieczenie: jeśli węzeł jest pusty, przerywamy działanie dla tej ścieżki
     if (korzen == nullptr) {
         return;
     }
-
-    //Sprawdzenie, czy dotarliśmy do liścia (liść nie ma lewego ani prawego dziecka)
+    //Sprawdzenie, czy dotarliśmy do liścia , liscie nie maja dzieci
     if (korzen->left == nullptr && korzen->right == nullptr) {
-        // Zabezpieczenie dla pliku zawierającego tylko 1 rodzaj znaku (np. "aaaaa")
+        // Zabezpieczenie dla pliku zawierającego tylko jedenego rodzaj znaku
         if (obecny_kod == "") {
             slownik_kodow[korzen->ch] = "0";
         } else {
@@ -135,19 +114,16 @@ void generuj_kody(Node* korzen, string obecny_kod, map<char, string>& slownik_ko
         }
         return;
     }
-    //Zejście rekurencyjne w dół drzewa:
-    // Idąc w lewo dopisujemy '0', idąc w prawo dopisujemy '1'
+    //Zejście rekurencyjne w dół drzewa - idąc w lewo dopisujemy '0', idąc w prawo dopisujemy '1'
     generuj_kody(korzen->left, obecny_kod + "0", slownik_kodow);
     generuj_kody(korzen->right, obecny_kod + "1", slownik_kodow);
 }
 
 // Zapis słownika (nagłówka) do pliku binarnego
 void zapisz_slownik(ofstream& outFile, const map<char, string>& slownik_kodow) {
-    // Zapisujemy liczbę unikalnych znaków na 1 bajcie (unsigned char: 0-255)
-    // Uwaga: jeśli wystąpią wszystkie 256 znaków ASCII, 256 zapisze się jako 0 (obsłużymy to przy odczycie)
+    // Zapisujemy liczbę unikalnych znaków na 1 bajcie 
     unsigned char liczba_znakow = static_cast<unsigned char>(slownik_kodow.size());
     outFile.write(reinterpret_cast<const char*>(&liczba_znakow), sizeof(liczba_znakow));
-
     // Iterujemy po każdej parze (znak -> ciąg bitów) w naszym słowniku
     for (const auto& para : slownik_kodow) {
         char znak = para.first;
@@ -176,24 +152,36 @@ void zapisz_slownik(ofstream& outFile, const map<char, string>& slownik_kodow) {
         outFile.write(reinterpret_cast<const char*>(bajty_kodu.data()), potrzebne_bajty);
     }
 }
+// Funkcja obliczająca rozmiary i procent zaoszczędzonego miejsca
+void wyswietl_statystyki(uint64_t rozmiar_przed, uint64_t rozmiar_naglowka, uint64_t rozmiar_po) {
+    cout << "kompresja zakonczona sukcesem" << endl;
+    if (rozmiar_przed > 0) {
+        double zaoszczedzono = (static_cast<double>(rozmiar_przed) - static_cast<double>(rozmiar_po)) / rozmiar_przed * 100.0;
+        cout << "Rozmiar: z " << rozmiar_przed << " B na " << rozmiar_po << " B "
+             << "(naglowek: " << rozmiar_naglowka << " B, zaoszczedzono: " << zaoszczedzono << "%)" << endl;
+    } else {
+        cout << "Rozmiar: z 0 B na 0 B (pusty plik)" << endl;
+    }
+}
 
 //Główna funkcja realizująca proces kompresji
 void kompresuj_plik(const string& plik_wejsciowy, const string& plik_wyjsciowy) {
     ifstream testPliku(plik_wejsciowy, ios::binary);
     if (!testPliku.is_open()) {
-        cout << "Nie mozna otworzyc pliku wejsciowego!" << endl;
+        cout << "nie mozna otworzyc pliku wejsciowego" << endl;
         return;
     }
     testPliku.close();
     // Zbieramy statystyki 
     map<char, int> statystyki = zbierz_wystapienia(plik_wejsciowy);
     if (statystyki.empty()) {
-        
-        cout << "Plik wejsciowy jest pusty!" << endl;
+        ofstream pustyOut(plik_wyjsciowy, ios::binary);
+        pustyOut.close();
+        cout << "plik wejsciowy jest pusty, utworzono plik wyjsciowy" << endl;
         return;
     }
 
-    // Obliczamy całkowitą liczbę znaków w pliku wejściowym (potrzebne do poprawnej dekompresji)
+    // Obliczamy całkowitą liczbę znaków w pliku wejściowym 
     uint32_t calkowita_liczba_znakow = 0;
     for (const auto& para : statystyki) {
         calkowita_liczba_znakow += para.second;
@@ -211,39 +199,39 @@ void kompresuj_plik(const string& plik_wejsciowy, const string& plik_wyjsciowy) 
     ifstream inFile(plik_wejsciowy, ios::binary);
     ofstream outFile(plik_wyjsciowy, ios::binary);
     if (!outFile.is_open()) {
-        cout << "Nie mozna utworzyc pliku wyjsciowego!" << endl;
+        cout << "nie mozna utworzyc pliku wyjsciowego" << endl;
         return;
     }
-
+    uint64_t rozmiar_naglowka = 1 + sizeof(calkowita_liczba_znakow);
+    for (const auto& para : slownik_kodow) {
+        rozmiar_naglowka += 2 + (para.second.length() + 7) / 8;
+    }
     // Zapisujemy słownik w nagłówku
     zapisz_slownik(outFile, slownik_kodow);
-
     // Zapisujemy całkowitą liczbę znaków (4 bajty), aby dekompresor wiedział kiedy przestać czytać bity
     outFile.write(reinterpret_cast<const char*>(&calkowita_liczba_znakow), sizeof(calkowita_liczba_znakow));
-
+    
     // Właściwe kodowanie treści pliku bit po bicie
-    unsigned char bufor_bitowy = 0; // Nasz 8-bitowy "pojemnik" na bity
-    int licznik_bitow = 0;          // Ile bitów obecnie znajduje się w buforze (0-8)
+    uint64_t rozmiar_po = rozmiar_naglowka;
+    unsigned char bufor_bitowy = 0; 
+    int licznik_bitow = 0;          
     char ch;
 
     while (inFile.get(ch)) {
         // Pobieramy ciąg zer i jedynek dla aktualnego znaku ze słownika
         const string& kod = slownik_kodow[ch];
-
         for (char bit : kod) {
             // Przesuwamy istniejące bity w buforze o 1 pozycję w lewo, robiąc miejsce z prawej strony
             bufor_bitowy = (bufor_bitowy << 1);
-
             // Jeśli aktualny znak kodu to '1', wpisujemy jedynkę na zwolnione miejsce z prawej strony
             if (bit == '1') {
                 bufor_bitowy = bufor_bitowy | 1;
             }
-
             licznik_bitow++;
-
             // Gdy bufor uzbiera pełny bajt (8 bitów), zapisujemy go do pliku i zerujemy liczniki
             if (licznik_bitow == 8) {
                 outFile.put(bufor_bitowy);
+                rozmiar_po++;
                 bufor_bitowy = 0;
                 licznik_bitow = 0;
             }
@@ -256,37 +244,44 @@ void kompresuj_plik(const string& plik_wejsciowy, const string& plik_wyjsciowy) 
         // Przesuwamy je maksymalnie w lewo, dopisując z prawej strony puste zera do pełnych 8 bitów
         bufor_bitowy = bufor_bitowy << (8 - licznik_bitow);
         outFile.put(bufor_bitowy);
+        rozmiar_po++;
     }
+    //wymusza natychmiastowy zapis danych z tymczasowego bufora w pamięci RAM na fizyczny dysk
+    outFile.flush();
+    bool zapis_udany = outFile.good();
 
     inFile.close();
     outFile.close();
-    cout << "Kompresja zakonczona sukcesem!" << endl;
+
+    if (zapis_udany) {
+        wyswietl_statystyki(calkowita_liczba_znakow, rozmiar_naglowka, rozmiar_po);
+    } else {
+        cout << "blad podczas zapisu do pliku" << endl;
+    }
 }
 
 // Główna funkcja realizująca proces dekompresji
 void dekompresuj_plik(const string& plik_skompresowany, const string& plik_wyjsciowy) {
     ifstream inFile(plik_skompresowany, ios::binary);
     if (!inFile.is_open()) {
-        cout << "Nie mozna otworzyc pliku do dekompresji!" << endl;
+        cout << "nie mozna otworzyc pliku do dekompresji" << endl;
         return;
     }
-
     // Odczytujemy liczbę unikalnych znaków ze słownika (1 bajt)
     unsigned char liczba_znakow_bajt;
     inFile.read(reinterpret_cast<char*>(&liczba_znakow_bajt), sizeof(liczba_znakow_bajt));
-    
     // Jeśli plik był pusty lub uszkodzony
+    // Jeśli plik był pusty (0 bajtów)
     if (inFile.eof()) {
-        cout << "Plik skompresowany jest pusty!" << endl;
+        ofstream pustyOut(plik_wyjsciowy, ios::binary);
+        pustyOut.close();
+        cout << "plik skompresowany jest pusty, utworzono pusty plik wyjsciowy" << endl;
         return;
     }
-
-    // Obsługa przypadku granicznego, gdy wystąpiły wszystkie 256 znaków ASCII (wtedy 256 zapisało się jako 0)
     int liczba_znakow = (liczba_znakow_bajt == 0) ? 256 : liczba_znakow_bajt;
-
     // Odwrócony słownik: ciąg bitów (np. "110") -> konkretny znak (np. 'a')
+    
     map<string, char> odwr_slownik;
-
     // Odczytujemy kolejne wpisy słownika
     for (int k = 0; k < liczba_znakow; ++k) {
         char znak;
@@ -313,19 +308,15 @@ void dekompresuj_plik(const string& plik_skompresowany, const string& plik_wyjsc
 
         odwr_slownik[kod] = znak;
     }
-
     // Odczytujemy całkowitą liczbę znaków oryginalnego tekstu (4 bajty)
     uint32_t calkowita_liczba_znakow = 0;
     inFile.read(reinterpret_cast<char*>(&calkowita_liczba_znakow), sizeof(calkowita_liczba_znakow));
-
     // Otwieramy plik wyjściowy w trybie binarnym (żeby zachować dokładne znaki nowej linii)
     ofstream outFile(plik_wyjsciowy, ios::binary);
-
     // Dekodowanie głównej treści bit po bicie
     string aktualny_kod = "";
     uint32_t odkodowane_znaki = 0;
     char bajt;
-
     // Czytamy plik bajt po bajcie, dopóki nie odkodujemy wszystkich oczekiwanych znaków
     while (odkodowane_znaki < calkowita_liczba_znakow && inFile.get(bajt)) {
         unsigned char u_bajt = static_cast<unsigned char>(bajt);
@@ -337,10 +328,10 @@ void dekompresuj_plik(const string& plik_skompresowany, const string& plik_wyjsc
             aktualny_kod += bit ? '1' : '0';
 
             // Sprawdzamy, czy zebrany ciąg bitów istnieje w naszym słowniku
-            // Ponieważ kody Huffmana są prefiksowe, dopasowanie jest zawsze jednoznaczne!
+            // Ponieważ kody Huffmana są prefiksowe, dopasowanie jest zawsze jednoznaczne
             auto it = odwr_slownik.find(aktualny_kod);
             if (it != odwr_slownik.end()) {
-                // Znaleziono literę! Zapisujemy ją do pliku wyjściowego
+                // Znaleziono literę Zapisujemy ją do pliku wyjściowego
                 outFile.put(it->second);
                 
                 // Resetujemy bufor kodu dla kolejnej litery i zwiększamy licznik
@@ -357,32 +348,40 @@ void dekompresuj_plik(const string& plik_skompresowany, const string& plik_wyjsc
 
     inFile.close();
     outFile.close();
-    cout << "Dekompresja zakonczona sukcesem!" << endl;
+    cout << "dekompresja zakonczona sukcesem" << endl;
 }
 
 // Główna funkcja programu obsługująca argumenty z linii poleceń
 int main(int argc, char* argv[]) {
-    // Sprawdzamy, czy użytkownik podał odpowiednią liczbę argumentów 
-    if (argc != 4) {
-        cout << "Blad! Nieprawidlowa liczba argumentow." << endl;
-        cout << "Uzycie:" << endl;
-        cout << "  Kompresja:   " << argv[0] << " -c <plik_wejsciowy> <plik_wyjsciowy>" << endl;
-        cout << "  Dekompresja: " << argv[0] << " -d <plik_wejsciowy> <plik_wyjsciowy>" << endl;
+    string tryb, plik_wejsciowy, plik_wyjsciowy;
+
+    if (argc == 4) {
+        tryb = argv[1];
+        plik_wejsciowy = argv[2];
+        plik_wyjsciowy = argv[3];
+    } 
+    else if (argc == 1) {
+        cout << "Tryb (k - kompresja, d - dekompresja): ";
+        cin >> tryb;
+        cout << "Plik wejsciowy: ";
+        cin >> plik_wejsciowy;
+        cout << "Plik wyjsciowy: ";
+        cin >> plik_wyjsciowy;
+    } 
+    else {
+        cout << "Blad Nieprawidlowa liczba argumentow." << endl;
+        cout << "Uzycie: " << argv[0] << " -k|-d <plik_wejsciowy> <plik_wyjsciowy>" << endl;
         return 1;
     }
 
-    string tryb = argv[1];
-    string plik_wejsciowy = argv[2];
-    string plik_wyjsciowy = argv[3];
-
-    if (tryb == "-c") {
+    if (tryb == "-k" || tryb == "k") {
         kompresuj_plik(plik_wejsciowy, plik_wyjsciowy);
     } 
-    else if (tryb == "-d") {
+    else if (tryb == "-d" || tryb == "d") {
         dekompresuj_plik(plik_wejsciowy, plik_wyjsciowy);
     } 
     else {
-        cout << "Nieznany tryb: " << tryb << ". Uzyj -c (kompresja) lub -d (dekompresja)." << endl;
+        cout << "Nieznany tryb: " << tryb << ". Uzyj k (kompresja) lub d (dekompresja)." << endl;
         return 1;
     }
 
