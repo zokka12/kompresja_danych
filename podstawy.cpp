@@ -7,7 +7,7 @@
 #include <cstdint>
 
 using namespace std;
-// Węzeł drzewa Huffmana
+// wezeł drzewa huffmana
 struct Node {
     char ch;
     int liczba_wystapien;
@@ -32,7 +32,6 @@ struct Node {
 };
 
 // Komparator do kolejki priorytetowej 
-// Chcemy, aby na górze były węzły o MAKSYMALNIE MAŁEJ częstotliwości
 struct Compare {
     // funkcja zwraca true jeżeli liczba wystąpień węzła lewego jest większa niż liczba wystąpień węzła prawego
     bool operator()(const Node* l, const Node* r) const{
@@ -48,7 +47,7 @@ void usun_drzewo(Node* korzen) {
     usun_drzewo(korzen->right);
     delete korzen;
 }
-// Funkcja do zbierania wystąpień znaków z pliku
+// funkcja do zbierania wystąpień znaków z pliku
 map<char, int> zbierz_wystapienia(const string& nazwa_pliku) {
     // Otwieramy plik w trybie binarnym
     ifstream inFile(nazwa_pliku, ios::binary);
@@ -63,96 +62,99 @@ map<char, int> zbierz_wystapienia(const string& nazwa_pliku) {
 }
 
 Node* zbuduj_drzewo(const map<char, int>& statystyki) {
-    // Tworzymy kolejkę priorytetową  (typ przechowywanych elementów, kontener - elementy sa w vector, komparator(żeby najmniejsze elementy były na górze))
+    // tworzymy kolejkę priorytetową  (typ przechowywanych elementów, kontener - elementy sa w vector, komparator(żeby najmniejsze elementy były na górze))
     priority_queue<Node*, vector<Node*>, Compare> kolejka;
-
-    // Dla każdej pary (znak - liczba wystąpień) z mapy tworzymy nowy liść
-    // auto -  automatycznie rozpoznaje typ zmiennej na podstawie przypisanej wartości
-    //statystyki - zmienna, przez którą pętla ma przejść
-    //Dla każdej (for) pojedynczej rzeczy (para), której nie będę modyfikować (const)
-    //ani kopiować (&), a jej typ niech C++ zgadnie sam (auto), wyciągniętej ze zbioru
-    //(:) statystyki – zrób to, co jest w klamrach.
+    
     for (const auto& para : statystyki) {
         char znak = para.first; // wyciągamy znak z pliku
         int czestotliwosc = para.second; // wyciągamy częstotliwość wystąpień znaku z pliku
-        
-        // Używamy Twojego pierwszego konstruktora dla liści
+        // tworzymy nowy węzeł liścia dla każdego znaku i jego częstotliwości, a następnie dodajemy go do kolejki priorytetowej
         kolejka.push(new Node(znak, czestotliwosc));
     }
-
-    //Łączymy węzły, dopóki w kolejce nie zostanie tylko korzeń drzewa
+    //łaczenie wezłów do momentu aż powstanie jeden wezel
     while (kolejka.size() > 1) {
-        // Zdejmujemy dwa drzewa o najmniejszej liczbie wystąpień
+        // zdejmuje dwa drzewa o najmniejszej liczbie wystąpień
         Node* lewe_dziecko = kolejka.top();
         kolejka.pop();
         Node* prawe_dziecko = kolejka.top();
         kolejka.pop();
-        // Obliczamy sumę wystąpień z obu zdjętych węzłów
+        // oblicza sumę wystąpień z obu zdjętych węzłów
         int suma = lewe_dziecko->liczba_wystapien + prawe_dziecko->liczba_wystapien;
-        // Tworzymy węzeł wewnętrzny używając Twojego drugiego konstruktora
+        // tworzymy węzeł wewnętrzny używając sumy jako liczby wystąpień i ustawi zdjęte węzły jako jego dzieci
         Node* rodzic = new Node(suma, lewe_dziecko, prawe_dziecko);
-        // Wstawiamy połączone drzewo z powrotem do kolejki
+        // wstawiamy podłączone drzewo spowrotem do kolejki
         kolejka.push(rodzic);
     }
-    // Ostatni pozostały w kolejce element to korzeń gotowego drzewa Huffmana
+    // zwraca ostatni element pozostały czyli drzewo huffmana
     return kolejka.top();
 }
-//  Generowanie kodów bitowych 
+
+//  GENEROWANIE KODÓW BITOWYCH
 void generuj_kody(Node* korzen, string obecny_kod, map<char, string>& slownik_kodow) {
-    //Zabezpieczenie: jeśli węzeł jest pusty, przerywamy działanie dla tej ścieżki
+    //jesli korzen jest pusty to zwracamy bo nie ma drzewa do przeszukania
     if (korzen == nullptr) {
         return;
     }
-    //Sprawdzenie, czy dotarliśmy do liścia , liscie nie maja dzieci
+    //czy dorarlismy do liscia , czyli wezła bez dzieci
     if (korzen->left == nullptr && korzen->right == nullptr) {
-        // Zabezpieczenie dla pliku zawierającego tylko jedenego rodzaj znaku
+        // jesli plik składał się z jednego znaku, to przypisujemy mu kod 0
         if (obecny_kod == "") {
             slownik_kodow[korzen->ch] = "0";
         } else {
-            // Zapisujemy wygenerowany ciąg bitów pod kluczem konkretnego znaku
+            // zapisujemy kod bitowy dla danego znaku w słowniku
             slownik_kodow[korzen->ch] = obecny_kod;
         }
         return;
     }
-    //Zejście rekurencyjne w dół drzewa - idąc w lewo dopisujemy '0', idąc w prawo dopisujemy '1'
+    //zejście rekurencyjne w dół drzewa - idąc w lewo dopisujemy 0, idąc w prawo dopisujemy 1
+    // -> przejdz pod adress korzen i odczytaj jego pole left
     generuj_kody(korzen->left, obecny_kod + "0", slownik_kodow);
     generuj_kody(korzen->right, obecny_kod + "1", slownik_kodow);
 }
 
-// Zapis słownika (nagłówka) do pliku binarnego
+// ZAPIS SŁOWNIKA - NAGŁÓWKA DO PLIKU BINARNEGO
 void zapisz_slownik(ofstream& outFile, const map<char, string>& slownik_kodow) {
-    // Zapisujemy liczbę unikalnych znaków na 1 bajcie 
+    // zapisujemy liczbe - unikalnych znaków size() - na jednym bajcie - unsighned char
+    // static cast - sprawia ze kom nie rzuca wyjatkeim
     unsigned char liczba_znakow = static_cast<unsigned char>(slownik_kodow.size());
+    // zapisujemy jeden bajt do pliku, reinterpretując unsigned char jako const char* - wskaźnik do danych
+    // sizeof(liczba_znakow) - odpowiada za to że fun .write wie na jakiej wielkości zapisać dane do pliku
     outFile.write(reinterpret_cast<const char*>(&liczba_znakow), sizeof(liczba_znakow));
-    // Iterujemy po każdej parze (znak -> ciąg bitów) w naszym słowniku
+    // iteracja przez wszystkie pozycje w słóowniku, const auto& para odpowiada za to że nie kopiujemy danych tylko odwołujemy się do nich
     for (const auto& para : slownik_kodow) {
+        // zapisujemy konkretny znak
         char znak = para.first;
+        // zapisujemy kod huffmana
         const string& kod = para.second;
+        // zapisujemy długość kodu w bitach na 1jednym bicie
         unsigned char dlugosc_kodu = static_cast<unsigned char>(kod.length());
-
-        // Zapisujemy 1 bajt znaku oraz 1 bajt określający długość jego kodu w bitach
+        // zapisujemy jeden bajt z sama litera
         outFile.write(&znak, sizeof(znak));
+        // zapisujemy jeden bajt z długością kodu w bitach
+        // dzięki temu dekompresor wie ile bitów odczytać dla danego znaku
         outFile.write(reinterpret_cast<const char*>(&dlugosc_kodu), sizeof(dlugosc_kodu));
-
-        // Pakujemy tekstowy ciąg zer i jedynek (np. "110") w prawdziwe bity
-        // Obliczamy, ile pełnych bajtów potrzeba na zapisanie 'dlugosc_kodu' bitów (zaokrąglenie w górę)
+    
         int potrzebne_bajty = (dlugosc_kodu + 7) / 8;
-        vector<unsigned char> bajty_kodu(potrzebne_bajty, 0); // Wektor wypełniony zerami
+        // tworzymy wektor o wyliczonej liczbie bajtów i wypełniamy go zerami, aby przygotować miejsce na spakowane bity kodu
+        vector<unsigned char> bajty_kodu(potrzebne_bajty, 0); 
 
         for (size_t i = 0; i < dlugosc_kodu; ++i) {
             if (kod[i] == '1') {
-                // Ustawiamy odpowiedni bit na 1 (od najbardziej znaczącego bitu w bajcie, czyli od lewej)
+                //sprawdzamy do ktorego bita trafiamy
                 int indeks_bajtu = i / 8;
                 int pozycja_bitu = 7 - (i % 8);
+                // ustawiamy odpowiedni bit na 1
                 bajty_kodu[indeks_bajtu] |= (1 << pozycja_bitu);
             }
         }
-
-        // Zapisujemy spakowane bajty kodu do pliku
+        // zapisujemy spakowane bity kodu do pliku binarnego z  potrzebną liczbą bajtów
         outFile.write(reinterpret_cast<const char*>(bajty_kodu.data()), potrzebne_bajty);
     }
 }
-// Funkcja obliczająca rozmiary i procent zaoszczędzonego miejsca
+
+// ile bajtów miał plik przed kompresja
+//ile bitów będzie miał słownik i licznik znaków
+//ile bajtów będzie miał plik po kompresji
 void wyswietl_statystyki(uint64_t rozmiar_przed, uint64_t rozmiar_naglowka, uint64_t rozmiar_po) {
     cout << "kompresja zakonczona sukcesem" << endl;
     if (rozmiar_przed > 0) {
@@ -164,15 +166,16 @@ void wyswietl_statystyki(uint64_t rozmiar_przed, uint64_t rozmiar_naglowka, uint
     }
 }
 
-//Główna funkcja realizująca proces kompresji
+//główna funkcja realizująca proces kompresji
 void kompresuj_plik(const string& plik_wejsciowy, const string& plik_wyjsciowy) {
+    //otwieramy plik wejściowy w trybie binarnym, aby sprawdzić czy istnieje i jest dostępny do odczytu
     ifstream testPliku(plik_wejsciowy, ios::binary);
     if (!testPliku.is_open()) {
         cout << "nie mozna otworzyc pliku wejsciowego" << endl;
         return;
     }
     testPliku.close();
-    // Zbieramy statystyki 
+    // zwracamy tabelkę, przy każdym znaku jest liczna wystąpień
     map<char, int> statystyki = zbierz_wystapienia(plik_wejsciowy);
     if (statystyki.empty()) {
         ofstream pustyOut(plik_wyjsciowy, ios::binary);
@@ -181,56 +184,62 @@ void kompresuj_plik(const string& plik_wejsciowy, const string& plik_wyjsciowy) 
         return;
     }
 
-    // Obliczamy całkowitą liczbę znaków w pliku wejściowym 
+    // sumuje wszystkie wystąpienia znakówile dokładnei miał plik wejściowy
     uint32_t calkowita_liczba_znakow = 0;
     for (const auto& para : statystyki) {
         calkowita_liczba_znakow += para.second;
     }
-
-    // Budujemy drzewo Huffmana 
+    // budujemy drzewo Huffmana 
+    // zwraca wskaźnik na korzeń drzewa
     Node* korzen = zbuduj_drzewo(statystyki);
-
-    // Generujemy słownik kodów bitowych 
+    // generujemy słownik kodów bitowych 
     map<char, string> slownik_kodow;
     generuj_kody(korzen, "", slownik_kodow);
+    // usuwamy drzewo huffmana, aby zwolnić pamięć
     usun_drzewo(korzen);
 
-    // Otwieramy plik wejściowy do ponownego odczytu oraz plik wyjściowy do zapisu binarnego
+    // otwieramy plik wejściowy do ponownego odczytu oraz plik wyjściowy do zapisu binarnego
     ifstream inFile(plik_wejsciowy, ios::binary);
     ofstream outFile(plik_wyjsciowy, ios::binary);
     if (!outFile.is_open()) {
         cout << "nie mozna utworzyc pliku wyjsciowego" << endl;
         return;
     }
+    // obliczamy rozmiar nagłówka w bajtach: jeden bajt na liczbę unikalnych znaków + drugi bajty na każdy wpis słownika + spakowane bity kodów
     uint64_t rozmiar_naglowka = 1 + sizeof(calkowita_liczba_znakow);
     for (const auto& para : slownik_kodow) {
         rozmiar_naglowka += 2 + (para.second.length() + 7) / 8;
     }
-    // Zapisujemy słownik w nagłówku
+    // zapisujemy słownik do pliku binarnego
     zapisz_slownik(outFile, slownik_kodow);
-    // Zapisujemy całkowitą liczbę znaków (4 bajty), aby dekompresor wiedział kiedy przestać czytać bity
+    // zapisujemy całkowitą liczbę znaków oryginalnego tekstu, dla dekompresora
     outFile.write(reinterpret_cast<const char*>(&calkowita_liczba_znakow), sizeof(calkowita_liczba_znakow));
     
-    // Właściwe kodowanie treści pliku bit po bicie
+    // rozmiar pliku po kompresji zaczyna się od rozmiaru nagłówka
     uint64_t rozmiar_po = rozmiar_naglowka;
+    // bufor bitowy do przechowywania spakowanych bitów przed zapisaniem ich do pliku
     unsigned char bufor_bitowy = 0; 
+    // licznik bitów w buforze, aby wiedzieć kiedy mamy pełny bajt do zapisania
     int licznik_bitow = 0;          
     char ch;
-
+    // czytamy po jednym znaku z pliku wejściowego aż do końca
     while (inFile.get(ch)) {
-        // Pobieramy ciąg zer i jedynek dla aktualnego znaku ze słownika
+        // bierzemy przypisany kod huffmana
         const string& kod = slownik_kodow[ch];
+        // iterujemy przez każdy bit w kodzie
         for (char bit : kod) {
-            // Przesuwamy istniejące bity w buforze o 1 pozycję w lewo, robiąc miejsce z prawej strony
+            // przesuwamy miejsce w buforze o jeden w lewo, aby zrobić miejsce na nowy bit z prawej strony
             bufor_bitowy = (bufor_bitowy << 1);
-            // Jeśli aktualny znak kodu to '1', wpisujemy jedynkę na zwolnione miejsce z prawej strony
+            // jesli bit == 1 to zamieniamy ostatni bit bufora na 1, w przeciwnym razie pozostaje 0
             if (bit == '1') {
                 bufor_bitowy = bufor_bitowy | 1;
             }
             licznik_bitow++;
-            // Gdy bufor uzbiera pełny bajt (8 bitów), zapisujemy go do pliku i zerujemy liczniki
+            // gdy buffor uzbiera 8 bitów
             if (licznik_bitow == 8) {
+                // zapisujemy pełny bajt do pliku wyjściowego
                 outFile.put(bufor_bitowy);
+                // zwiększamy licznik rozmiaru pliku po kompresji o 1 bajt
                 rozmiar_po++;
                 bufor_bitowy = 0;
                 licznik_bitow = 0;
@@ -238,16 +247,17 @@ void kompresuj_plik(const string& plik_wejsciowy, const string& plik_wyjsciowy) 
         }
     }
 
-    // Obsługa niedopełnionego ostatniego bajtu (Padding)
-    // Jeśli po przeczytaniu całego pliku w buforze zostały jakieś bity (np. 3 bity)
+    // obsługa niedopełnionego ostatniego bajtu
+    // jeśli po przeczytaniu całego pliku w buforze zostały jakieś bity (
     if (licznik_bitow > 0) {
-        // Przesuwamy je maksymalnie w lewo, dopisując z prawej strony puste zera do pełnych 8 bitów
+        // przesuwamy je maksymalnie w lewo, dopisując z prawej strony puste zera 
         bufor_bitowy = bufor_bitowy << (8 - licznik_bitow);
         outFile.put(bufor_bitowy);
         rozmiar_po++;
     }
-    //wymusza natychmiastowy zapis danych z tymczasowego bufora w pamięci RAM na fizyczny dysk
+    // wymusza natychmiastowy zapis danych z pamieci na dysk
     outFile.flush();
+    // sprawdza błędy
     bool zapis_udany = outFile.good();
 
     inFile.close();
@@ -260,29 +270,30 @@ void kompresuj_plik(const string& plik_wejsciowy, const string& plik_wyjsciowy) 
     }
 }
 
-// Główna funkcja realizująca proces dekompresji
+// główna funkcja realizująca proces dekompresji
 void dekompresuj_plik(const string& plik_skompresowany, const string& plik_wyjsciowy) {
+    //otwieramy plik zeby czytać surowe bajty bez zmian
     ifstream inFile(plik_skompresowany, ios::binary);
     if (!inFile.is_open()) {
         cout << "nie mozna otworzyc pliku do dekompresji" << endl;
         return;
     }
-    // Odczytujemy liczbę unikalnych znaków ze słownika (1 bajt)
+    // odczytujemy liczbę unikalnych znaków ze słownika 
     unsigned char liczba_znakow_bajt;
+    // próbujemy wczytać pierwszy baji z brzegu, który mowi ile unikalnych znaków jest w słowniku
     inFile.read(reinterpret_cast<char*>(&liczba_znakow_bajt), sizeof(liczba_znakow_bajt));
-    // Jeśli plik był pusty lub uszkodzony
-    // Jeśli plik był pusty (0 bajtów)
+    // jeśli plik był pusty lub uszkodzony
     if (inFile.eof()) {
         ofstream pustyOut(plik_wyjsciowy, ios::binary);
         pustyOut.close();
         cout << "plik skompresowany jest pusty, utworzono pusty plik wyjsciowy" << endl;
         return;
     }
+    //zabezpieczenie przed wystapieniem wszystkich 256 znaków
     int liczba_znakow = (liczba_znakow_bajt == 0) ? 256 : liczba_znakow_bajt;
-    // Odwrócony słownik: ciąg bitów (np. "110") -> konkretny znak (np. 'a')
-    
+    // tworzymy owrócony słownik
     map<string, char> odwr_slownik;
-    // Odczytujemy kolejne wpisy słownika
+    // odczytujemy kolejne wpisy słownika
     for (int k = 0; k < liczba_znakow; ++k) {
         char znak;
         unsigned char dlugosc_kodu;
@@ -290,55 +301,53 @@ void dekompresuj_plik(const string& plik_skompresowany, const string& plik_wyjsc
         inFile.read(&znak, sizeof(znak));
         inFile.read(reinterpret_cast<char*>(&dlugosc_kodu), sizeof(dlugosc_kodu));
 
-        // Obliczamy, ile bajtów zajmują spakowane bity tego kodu
+        // obliczamy, ile bajtów zajmują spakowane bity tego kodu
         int potrzebne_bajty = (dlugosc_kodu + 7) / 8;
         vector<unsigned char> bajty_kodu(potrzebne_bajty);
         inFile.read(reinterpret_cast<char*>(bajty_kodu.data()), potrzebne_bajty);
 
-        // Rozpakowujemy bity z powrotem do tekstowego ciągu zer i jedynek
+        // rozpakowujemy bity z powrotem do tekstowego ciągu zer i jedynek
         string kod = "";
         for (int i = 0; i < dlugosc_kodu; ++i) {
             int indeks_bajtu = i / 8;
             int pozycja_bitu = 7 - (i % 8);
             
-            // Sprawdzamy, czy na danej pozycji w bajcie znajduje się 1 czy 0
+            // sprawdzamy, czy na danej pozycji w bajcie znajduje się 1 czy 0
             bool czy_jedynka = (bajty_kodu[indeks_bajtu] & (1 << pozycja_bitu)) != 0;
             kod += czy_jedynka ? '1' : '0';
         }
 
         odwr_slownik[kod] = znak;
     }
-    // Odczytujemy całkowitą liczbę znaków oryginalnego tekstu (4 bajty)
+    // odczytujemy całkowitą liczbę znaków oryginalnego tekstu (4 bajty)
     uint32_t calkowita_liczba_znakow = 0;
     inFile.read(reinterpret_cast<char*>(&calkowita_liczba_znakow), sizeof(calkowita_liczba_znakow));
-    // Otwieramy plik wyjściowy w trybie binarnym (żeby zachować dokładne znaki nowej linii)
+    // otwieramy plik wyjściowy w trybie binarnym (żeby zachować dokładne znaki nowej linii)
     ofstream outFile(plik_wyjsciowy, ios::binary);
-    // Dekodowanie głównej treści bit po bicie
+    // dekodowanie głównej treści bit po bicie
     string aktualny_kod = "";
     uint32_t odkodowane_znaki = 0;
     char bajt;
-    // Czytamy plik bajt po bajcie, dopóki nie odkodujemy wszystkich oczekiwanych znaków
+    // czytamy plik bajt po bajcie, dopóki nie odkodujemy wszystkich oczekiwanych znaków
     while (odkodowane_znaki < calkowita_liczba_znakow && inFile.get(bajt)) {
         unsigned char u_bajt = static_cast<unsigned char>(bajt);
 
-        // Rozbijamy pojedynczy bajt na 8 osobnych bitów (od lewej do prawej, czyli od 7 do 0)
         for (int i = 7; i >= 0; --i) {
             // Wyciągamy i-ty bit z bajtu
             bool bit = (u_bajt & (1 << i)) != 0;
             aktualny_kod += bit ? '1' : '0';
 
-            // Sprawdzamy, czy zebrany ciąg bitów istnieje w naszym słowniku
-            // Ponieważ kody Huffmana są prefiksowe, dopasowanie jest zawsze jednoznaczne
+            // sprawdzamy czy zebrany ciąg bitów istnieje w naszym słowniku
             auto it = odwr_slownik.find(aktualny_kod);
             if (it != odwr_slownik.end()) {
-                // Znaleziono literę Zapisujemy ją do pliku wyjściowego
+                // znaleziono literę Zapisujemy ją do pliku wyjściowego
                 outFile.put(it->second);
                 
-                // Resetujemy bufor kodu dla kolejnej litery i zwiększamy licznik
+                // resetujemy bufor kodu dla kolejnej litery i zwiększamy licznik
                 aktualny_kod = "";
                 odkodowane_znaki++;
 
-                // Jeśli odkodowaliśmy już cały tekst, przerywamy pętlę (ignorujemy zera dopełniające ostatni bajt)
+                // jeśli odkodowaliśmy już cały tekst, przerywamy pętlę 
                 if (odkodowane_znaki == calkowita_liczba_znakow) {
                     break;
                 }
